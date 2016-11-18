@@ -19,11 +19,11 @@ class TestDisco(SleekTest):
     def testCreateInfoQueryNoNode(self):
         """Testing disco#info query with no node."""
         iq = self.Iq()
-        iq['disco_info']['node'] = ''
+        iq['jingle']['content'] = ''
 
         self.check(iq, """
           <iq>
-            <query xmlns="http://jabber.org/protocol/disco#info" />
+            <jingle xmlns='urn:xmpp:jingle:1' />
           </iq>
         """)
 

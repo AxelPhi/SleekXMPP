@@ -24,7 +24,7 @@ class TestJingleSession(SleekTest):
         self.stream_close()
 
     def testAcceptSession(self):
-        self.xmpp['xep_0166']._sessions['a73sjjvkla37jfea'] = JingleSession('a73sjjvkla37jfea0',
+        self.xmpp['xep_0166']._sessions['a73sjjvkla37jfea'] = JingleSession(self.xmpp['xep_0166'], 'a73sjjvkla37jfea0',
                                                                             'romeo@montague.lit/orchard',
                                                                             'juliet@capulet.lit/balcony')
 
@@ -55,14 +55,12 @@ class TestJingleSession(SleekTest):
                 """)
 
     def testInitiateSession(self):
-
         results = []
 
         def handle_jingle(jingle_session):
             results.append(jingle_session.session_id)
 
         self.xmpp.add_event_handler(EVENT_SESSION_REQUEST, handle_jingle)
-
 
         self.recv("""
         <iq to='juliet@capulet.lit/balcony'
@@ -90,6 +88,38 @@ class TestJingleSession(SleekTest):
         </iq>
         """)
 
-        self.failUnless(len(results) > 0)
+        self.failUnless('a73sjjvkla37jfea' == results[0])
+
+    def testInitiateAndAcceptSession(self):
+        self.xmpp['xep_0166'].auto_accept = True
+
+        self.recv("""
+        <iq to='juliet@capulet.lit/balcony'
+            from='romeo@montague.lit/orchard'
+            id='zid615d9'
+            type='set'>
+            <jingle xmlns='urn:xmpp:jingle:1'
+                action='session-initiate'
+                initiator='romeo@montague.lit/orchard'
+                sid='a73sjjvkla37jfea'>
+                <content creator='initiator' name='this-is-a-stub'>
+                    <description xmlns='urn:xmpp:jingle:apps:stub:0'/>
+                    <transport xmlns='urn:xmpp:jingle:transports:stub:0'/>
+                 </content>
+            </jingle>
+        </iq>
+        """)
+
+        time.sleep(.5)
+
+        self.send("""
+        <iq to='romeo@montague.lit/orchard'
+            id='zid615d9'
+            type='result'>
+        </iq>
+        """)
+
+        self.failUnless('a73sjjvkla37jfea' in self.xmpp['xep_0166']._sessions.keys())
+
 
 suite = unittest.TestLoader().loadTestsFromTestCase(TestJingleSession)

@@ -1,6 +1,5 @@
-from datetime import datetime
 import logging
-from uuid import uuid1
+from datetime import datetime
 
 from sleekxmpp import Iq
 from sleekxmpp.plugins.base import BasePlugin
@@ -39,14 +38,26 @@ class JingleSession(object):
         self.last_action_at = self.created_at
         self.state = PENDING
 
-    def accept(self):
-        pass
-
-    def accepted(self):
+    def _activate(self):
         if not self.state == PENDING:
             raise OutOfOrder(self.session_id)
         self.state = ACTIVE
         self.last_action_at = datetime.now()
+
+    def _terminate(self):
+        self.state = ENDED
+        self.last_action_at = datetime.now()
+
+    def accept_request(self):
+        log.debug('Accepting sessiob with: {}'.format(self.initiator))
+        self._activate()
+
+    def accepted_by_peer(self):
+        log.debug('Session accepted by: {}'.format(self.responder))
+        self._activate()
+
+    def terminated_by_peer(self):
+        self._terminate()
 
 
 class XEP_0166(BasePlugin):
@@ -58,20 +69,12 @@ class XEP_0166(BasePlugin):
     description = 'XEP-0166: Jingle'
     dependencies = set(['xep_0020', 'xep_0030'])
     stanza = stanza
+    default_config = {
+        'auto_accept': False
+    }
 
-    def plugin_init(self):
-
-        register_stanza_plugin(Iq, Jingle)
-        register_stanza_plugin(Iq, JingleError)
-        register_stanza_plugin(Jingle, Content)
-        register_stanza_plugin(Jingle, Reason)
-        for reason_element in reason_elements:
-            register_stanza_plugin(Reason, reason_element)
-
-        self.xmpp.registerHandler(
-            Callback('Jingle Session Handling',
-                     StanzaPath('iq/jingle'),
-                     self._handle_jingle_stanza))
+    def __init__(self, xmpp, config=None):
+        super(XEP_0166, self).__init__(xmpp, config)
 
         self._sessions = {}
         self._content_handlers = {}
@@ -94,6 +97,20 @@ class XEP_0166(BasePlugin):
             'transport-reject': None,
             'transport-replace': None
         }
+
+    def plugin_init(self):
+
+        register_stanza_plugin(Iq, Jingle)
+        register_stanza_plugin(Iq, JingleError)
+        register_stanza_plugin(Jingle, Content)
+        register_stanza_plugin(Jingle, Reason)
+        for reason_element in reason_elements:
+            register_stanza_plugin(Reason, reason_element)
+
+        self.xmpp.registerHandler(
+            Callback('Jingle Session Handling',
+                     StanzaPath('iq/jingle'),
+                     self._handle_jingle_stanza))
 
     def plugin_end(self):
         # cleanup
@@ -127,7 +144,6 @@ class XEP_0166(BasePlugin):
                 raise UnknownSession(sid)
             if action == ACTION_SESSION_INITIATE and sid in self._sessions:
                 raise DuplicateSession(sid)
-
             if action == ACTION_SESSION_INITIATE:
                 self._jingle_actions[action](sid, iq, jingle)
             else:
@@ -138,27 +154,49 @@ class XEP_0166(BasePlugin):
             iq[exc.error_class].set_condition(exc.condition)
             iq.send()
 
+    def _acknowledge(self, iq):
+        iq.reply(True)
+        iq.set_type('result')
+        iq.send()
+
     def _session_initiate(self, sid, iq, jingle):
         session = JingleSession(self, sid, jingle['initiator'], iq['to'])
         self._sessions[sid] = session
-        self.xmpp.event(EVENT_SESSION_REQUEST, session)
-        iq.reply(True)
-        iq.set_type('result')
-        iq.send()
+        self._acknowledge(iq)
+        if not self.auto_accept:
+            self.xmpp.event(EVENT_SESSION_REQUEST, session)
+        else:
+            self._sessions[sid].accept_request()
+
 
     def _session_accept(self, session, iq, jingle):
-        session.accept()
-        iq.reply(True)
-        iq.set_type('result')
-        iq.send()
+        """
+
+        :type session: JingleSession
+        """
+        session.accepted_by_peer()
+        self._acknowledge(iq)
 
     def _session_terminate(self, session, iq, jingle):
-        pass
+        """
+
+        :type session: JingleSession
+        """
+        session.terminated_by_peer()
+        self._acknowledge(iq)
 
     def _session_info(self, session, iq, jingle):
+        """
+
+        :type session: JingleSession
+        """
         pass
 
     def _content_accept(self, session, iq, jingle):
+        """
+
+        :type session: JingleSession
+        """
         pass
 
     def _content_add(self, session, iq, jingle):

@@ -4,6 +4,7 @@ import time
 import unittest
 
 from sleekxmpp.plugins.xep_0166.jingle import JingleSession
+from sleekxmpp.plugins.xep_0166.jingle import EVENT_SESSION_REQUEST
 from sleekxmpp.test import SleekTest
 
 
@@ -24,8 +25,8 @@ class TestJingleSession(SleekTest):
 
     def testAcceptSession(self):
         self.xmpp['xep_0166']._sessions['a73sjjvkla37jfea'] = JingleSession('a73sjjvkla37jfea0',
-                                                                              'romeo@montague.lit/orchard',
-                                                                              'juliet@capulet.lit/balcony')
+                                                                            'romeo@montague.lit/orchard',
+                                                                            'juliet@capulet.lit/balcony')
 
         self.recv("""
                 <iq from='juliet@capulet.lit/balcony'
@@ -54,6 +55,15 @@ class TestJingleSession(SleekTest):
                 """)
 
     def testInitiateSession(self):
+
+        results = []
+
+        def handle_jingle(jingle_session):
+            results.append(jingle_session.session_id)
+
+        self.xmpp.add_event_handler(EVENT_SESSION_REQUEST, handle_jingle)
+
+
         self.recv("""
         <iq to='juliet@capulet.lit/balcony'
             from='romeo@montague.lit/orchard'
@@ -80,5 +90,6 @@ class TestJingleSession(SleekTest):
         </iq>
         """)
 
+        self.failUnless(len(results) > 0)
 
 suite = unittest.TestLoader().loadTestsFromTestCase(TestJingleSession)

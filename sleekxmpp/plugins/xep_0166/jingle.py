@@ -13,10 +13,6 @@ from sleekxmpp.xmlstream import register_stanza_plugin
 from sleekxmpp.xmlstream.handler import Callback
 from sleekxmpp.xmlstream.matcher import StanzaPath
 
-ACTION_SESSION_INITIATE = 'session-initiate'
-
-ACTION_SESSION_TERMINATE = 'session-terminate'
-
 log = logging.getLogger(__name__)
 
 # Session states
@@ -24,9 +20,18 @@ PENDING = 'pending'
 ACTIVE = 'active'
 ENDED = 'ended'
 
+# Jingle action constants
+ACTION_SESSION_ACCEPT = 'session-accept'
+ACTION_SESSION_INITIATE = 'session-initiate'
+ACTION_SESSION_TERMINATE = 'session-terminate'
+
+# Event names
+EVENT_SESSION_REQUEST = 'jingle-session-request'
+
 
 class JingleSession(object):
-    def __init__(self, session_id, initiator, responder):
+    def __init__(self, plugin, session_id, initiator, responder):
+        self.plugin = plugin
         self.session_id = session_id
         self.initiator = initiator
         self.responder = responder
@@ -35,10 +40,14 @@ class JingleSession(object):
         self.state = PENDING
 
     def accept(self):
+        pass
+
+    def accepted(self):
         if not self.state == PENDING:
             raise OutOfOrder(self.session_id)
         self.state = ACTIVE
         self.last_action_at = datetime.now()
+
 
 class XEP_0166(BasePlugin):
     """
@@ -76,7 +85,7 @@ class XEP_0166(BasePlugin):
             'content-remove': None,
             'description-info': None,
             'security-info': None,
-            'session-accept': self._session_accept,
+            ACTION_SESSION_ACCEPT: self._session_accept,
             'session-info': None,
             ACTION_SESSION_INITIATE: self._session_initiate,
             ACTION_SESSION_TERMINATE: self._session_terminate,
@@ -130,8 +139,9 @@ class XEP_0166(BasePlugin):
             iq.send()
 
     def _session_initiate(self, sid, iq, jingle):
-        session = JingleSession(sid, jingle['initiator'], iq['to'])
+        session = JingleSession(self, sid, jingle['initiator'], iq['to'])
         self._sessions[sid] = session
+        self.xmpp.event(EVENT_SESSION_REQUEST, session)
         iq.reply(True)
         iq.set_type('result')
         iq.send()

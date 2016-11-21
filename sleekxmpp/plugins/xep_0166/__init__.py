@@ -11,5 +11,6 @@ from sleekxmpp.plugins.base import register_plugin
 from sleekxmpp.plugins.xep_0166 import stanza
 from sleekxmpp.plugins.xep_0166.jingle import XEP_0166
 
-
 register_plugin(XEP_0166)
+
+xep_0166 = XEP_0166
